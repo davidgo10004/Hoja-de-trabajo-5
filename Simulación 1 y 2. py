@@ -1,0 +1,92 @@
+import random
+import simpy
+import statistics
+import matplotlib.pyplot as plt
+
+RANDOM_SEED = 42
+RAM_TOTAL = 100
+INSTRUCCIONES_POR_TURNO = 3
+
+
+def proceso(env, name, ram, cpu, tiempos, instrucciones_por_turno):
+
+    llegada = env.now
+    memoria = random.randint(1, 10)
+    instrucciones = random.randint(1, 10)
+
+    yield ram.get(memoria)
+
+    while instrucciones > 0:
+
+        with cpu.request() as req:
+            yield req
+
+            ejecutar = min(instrucciones_por_turno, instrucciones)
+            yield env.timeout(1)
+            instrucciones -= ejecutar
+
+        if instrucciones > 0:
+            numero = random.randint(1, 21)
+
+            if numero == 1:
+                yield env.timeout(1)
+
+    yield ram.put(memoria)
+
+    salida = env.now
+    tiempos.append(salida - llegada)
+
+
+def generar_procesos(env, ram, cpu, tiempos, cantidad_procesos, instrucciones_por_turno, intervalo):
+
+    for i in range(cantidad_procesos):
+        env.process(proceso(env, f'Proceso {i}', ram, cpu, tiempos, instrucciones_por_turno))
+        yield env.timeout(random.expovariate(1 / intervalo))
+
+
+def correr_simulacion(cantidad_procesos, instrucciones_por_turno, intervalo):
+
+    random.seed(RANDOM_SEED)
+
+    env = simpy.Environment()
+    ram = simpy.Container(env, init=RAM_TOTAL, capacity=RAM_TOTAL)
+    cpu = simpy.Resource(env, capacity=1)
+    tiempos = []
+
+    env.process(generar_procesos(env, ram, cpu, tiempos, cantidad_procesos, instrucciones_por_turno, intervalo))
+    env.run()
+
+    promedio = statistics.mean(tiempos)
+    desviacion = statistics.stdev(tiempos)
+
+    print(f'Procesos: {cantidad_procesos} | Intervalo: {intervalo}')
+    print(f'Tiempo promedio: {promedio:.2f}, Desviación estándar: {desviacion:.2f}')
+    print("-" * 40)
+
+    return promedio
+
+
+def ejecutar_escenario(intervalo):
+
+    procesos_lista = [25, 50, 100, 150, 200]
+    promedios = []
+
+    for p in procesos_lista:
+        promedio = correr_simulacion(p, INSTRUCCIONES_POR_TURNO, intervalo)
+        promedios.append(promedio)
+
+    plt.plot(procesos_lista, promedios)
+    plt.xlabel("Numero de procesos")
+    plt.ylabel("Tiempo promedio")
+    plt.title(f"Intervalo {intervalo}")
+    plt.show()
+
+
+print("Intervalo 10")
+ejecutar_escenario(10)
+
+print(" Intervalo 5")
+ejecutar_escenario(5)
+
+print(" Intervalo 1")
+ejecutar_escenario(1) 
